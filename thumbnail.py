@@ -99,6 +99,7 @@ def create_thumbnail(filename):
     except Exception as e:
         traceback.print_exc()
     finally:
+        container.close()
         os.rename(random_filename, filename)
         if os.path.exists(random_filename_2):
             os.remove(random_filename_2)
