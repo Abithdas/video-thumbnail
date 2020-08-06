@@ -23,3 +23,7 @@ something like `*.ttf` and put it in the current directory, specify the font nam
 
 You may notice that files are renamed and some temporary files are created when running the program. This is due to the
 ridiculous bug in PyAV which nobody cares. I would really appreciate it if someone could repair this bug.
+
+---
+
+the container was not closed in time caused the temporary filename problem
