@@ -1,6 +1,6 @@
 # Thumbnails
 
-![](example.jpg.jpg)
+![](example.jpg)
 
 
 # Thumbnail Generator
