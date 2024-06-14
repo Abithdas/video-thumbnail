@@ -2,9 +2,6 @@
 
 ![](example.jpg)
 
-Great! Including the font file simplifies the setup process further. Here is the updated README file to reflect the inclusion of the font file:
-
----
 
 # Thumbnail Generator
 
@@ -58,12 +55,9 @@ If you prefer to install the dependencies manually, follow these steps:
    - Ensure that the `FONT_NAME` variable in `thumbnail.py` is set to `"HelveticaNeue.ttc"`.
 
 2. **Run the Thumbnail Generator:**
-   - Open a command prompt and navigate to the directory containing `thumbnail.py`.
-   - Run the script by executing:
-     ```sh
-     python thumbnail.py
-     ```
-   - You will be prompted to enter the path of the directory containing the video files you want to process.
+   - Place `thumbnail.py` and `HelveticaNeue.ttc` in the folder along with the video files for which you want to create thumbnails.
+   - Double-click `thumbnail.py` to run the script.
+   - Press `Enter` when prompted to start the thumbnail generation process.
 
 3. **Temporary Files:**
    - You may notice that files are renamed and some temporary files are created during the script execution. This is a workaround for a known bug in PyAV.
@@ -85,4 +79,4 @@ If you prefer to install the dependencies manually, follow these steps:
 - `run_update_script.bat`: Batch file to run the PowerShell script as administrator.
 - `HelveticaNeue.ttc`: Font file required by the script.
 
-This updated README file should now provide clear and concise instructions for setting up and running your thumbnail generator script, with the font file included.
+This updated README file should now provide clear and concise instructions for setting up and running your thumbnail generator script, with the font file included and new instructions for running the thumbnail generator script directly.
