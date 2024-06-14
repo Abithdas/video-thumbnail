@@ -1,14 +1,17 @@
 import os
 import re
-import string
 import subprocess
 import traceback
 from secrets import choice
+import logging
 
 import av
 from PIL import Image, ImageFont, ImageDraw
 
-# Tune these settings...
+# Logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Constants
 IMAGE_PER_ROW = 5
 IMAGE_ROWS = 7
 PADDING = 5
@@ -25,35 +28,49 @@ def get_time_display(time: int) -> str:
 
 
 def get_random_filename(ext: str) -> str:
-    return ''.join(choice(string.ascii_lowercase) for _ in range(20)) + ext
+    return ''.join(choice('abcdefghijklmnopqrstuvwxyz') for _ in range(20)) + ext
+
+
+def format_size(size: int) -> str:
+    if size < 1024**3:  # Less than 1 GB
+        return f"{size / 1024**2:.2f} MB"
+    else:
+        return f"{size / 1024**3:.2f} GB"
 
 
 def create_thumbnail(filename: str) -> None:
-    print(f'Processing: {filename}')
-
-    jpg_name = f'{filename}.jpg'
-    if os.path.exists(jpg_name):
-        print('Thumbnail assumed exists!')
-        return
-
-    _, ext = os.path.splitext(filename)
-    random_filename = get_random_filename(ext)
-    random_filename_2 = get_random_filename(ext)
-    print(f'Rename as {random_filename} to avoid decode error...')
     try:
+        logging.info(f'Processing: {filename}')
+
+        jpg_name = f'{filename}.jpg'
+        if os.path.exists(jpg_name):
+            logging.info('Thumbnail already exists!')
+            return
+
+        _, ext = os.path.splitext(filename)
+        random_filename = get_random_filename(ext)
+        random_filename_2 = get_random_filename(ext)
+        logging.info(f'Renaming {filename} to {random_filename} to avoid decode error...')
         os.rename(filename, random_filename)
+        
         try:
             container = av.open(random_filename)
-        except UnicodeDecodeError:
-            print('Metadata decode error. Try removing all the metadata...')
-            subprocess.run(["ffmpeg", "-i", random_filename, "-map_metadata", "-1", "-c:v", "copy", "-c:a", "copy",
-                            random_filename_2], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except av.AVError:
+            logging.error('AVError: Metadata decode error. Trying to remove all metadata...')
+            subprocess.run(["ffmpeg", "-i", random_filename, "-map_metadata", "-1", "-c:v", "copy", "-c:a", "copy", random_filename_2], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             container = av.open(random_filename_2)
+
+        # Get file size
+        size_bytes = os.path.getsize(random_filename)
+        size_formatted = format_size(size_bytes)
 
         metadata = [
             f"File name: {filename}",
-            f"Size: {container.size} bytes ({container.size / 1048576:.2f} MB)",
+            f"Size: {size_formatted}",
             f"Duration: {get_time_display(container.duration // 1000000)}",
+            f"Frame width: {container.streams.video[0].width}",
+            f"Frame height: {container.streams.video[0].height}",
+            f"Bit rate: {container.bit_rate // 1024} kbps",
         ]
 
         start = min(container.duration // (IMAGE_PER_ROW * IMAGE_ROWS), 5 * 1000000)
@@ -75,19 +92,27 @@ def create_thumbnail(filename: str) -> None:
 
         img = Image.new("RGB", (IMAGE_WIDTH, IMAGE_WIDTH), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
+
         try:
             font = ImageFont.truetype(FONT_NAME, FONT_SIZE)
-        except OSError:
-            print(f"Font '{FONT_NAME}' not found. Using default font.")
+        except (OSError, IOError) as e:
+            logging.warning(f"Font '{FONT_NAME}' not found or could not be loaded. Using default font.")
             font = ImageFont.load_default()
-        _, min_text_height = draw.textsize("\n".join(metadata), font=font)
+
+        text = "\n".join(metadata)
+        text_bbox = draw.textbbox((PADDING, PADDING), text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+        draw.text((PADDING, PADDING), text, TEXT_COLOR, font=font)
+
         image_width_per_img = int(round((IMAGE_WIDTH - PADDING) / IMAGE_PER_ROW)) - PADDING
         image_height_per_img = int(round(image_width_per_img / width * height))
-        image_start_y = PADDING * 2 + min_text_height
+        image_start_y = PADDING * 2 + text_height
 
         img = Image.new("RGB", (IMAGE_WIDTH, image_start_y + (PADDING + image_height_per_img) * IMAGE_ROWS), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
-        draw.text((PADDING, PADDING), "\n".join(metadata), TEXT_COLOR, font=font)
+        draw.text((PADDING, PADDING), text, TEXT_COLOR, font=font)
+
         for idx, snippet in enumerate(images):
             y = idx // IMAGE_PER_ROW
             x = idx % IMAGE_PER_ROW
@@ -99,34 +124,42 @@ def create_thumbnail(filename: str) -> None:
             draw.text((x + PADDING, y + PADDING), get_time_display(timestamp), TIMESTAMP_COLOR, font=font)
 
         img.save(jpg_name)
-        print('OK!')
+        logging.info(f'Thumbnail saved: {jpg_name}')
+
     except Exception as e:
+        logging.error(f'Error processing {filename}: {e}')
         traceback.print_exc()
+
     finally:
         try:
             container.close()
         except Exception as e:
-            print("Error closing container:", e)
-        os.rename(random_filename, filename)
+            logging.error("Error closing container:", e)
+        
+        try:
+            os.rename(random_filename, filename)
+        except Exception as e:
+            logging.error(f"Error renaming {random_filename} back to {filename}: {e}")
+
         if os.path.exists(random_filename_2):
-            os.remove(random_filename_2)
+            try:
+                os.remove(random_filename_2)
+            except Exception as e:
+                logging.error(f"Error deleting {random_filename_2}: {e}")
 
 
 if __name__ == "__main__":
-    p = input("Input the path you want to process: ")
+    p = input("Input the path you want to process: ").strip()
     p = os.path.abspath(p)
 
     if not os.path.isdir(p):
-        print(f"Path '{p}' is not a valid directory.")
+        logging.error(f"Path '{p}' is not a valid directory.")
         exit(1)
 
     for root, _, files in os.walk(p):
-        print(f'Switch to root {root}...')
+        logging.info(f'Switch to root {root}...')
         os.chdir(root)
         for file in files:
             ext_regex = r"\.(mov|mp4|mpg|mpeg|flv|wmv|avi|mkv)$"
             if re.search(ext_regex, file, re.IGNORECASE):
-                try:
-                    create_thumbnail(file)
-                except Exception as e:
-                    print(f"Failed to create thumbnail for {file}: {e}")
+                create_thumbnail(file)
