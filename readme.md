@@ -12,6 +12,7 @@ Installing dependencies manually can be a challenging and tedious process. To si
 ### Prerequisites
 
 - Windows 10 or above
+- Py 3.9.11
 
 ### Automated Installation
 
